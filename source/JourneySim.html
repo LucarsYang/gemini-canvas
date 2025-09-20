@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>人生旅途模擬器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        body {
+            font-family: 'Noto Serif TC', serif;
+        }
+        .story-text p, .story-text div {
+            margin-bottom: 1rem;
+        }
+        .option-btn, #submit-decision-btn {
+            transition: all 0.3s ease;
+        }
+        .option-btn:hover:not(:disabled), #submit-decision-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        #loading-spinner {
+            border-top-color: #f3f3f3;
+            -webkit-animation: spin 1s linear infinite;
+            animation: spin 1s linear infinite;
+        }
+        @-webkit-keyframes spin {
+            0% { -webkit-transform: rotate(0deg); }
+            100% { -webkit-transform: rotate(360deg); }
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .attr-change {
+            animation: fadeInOut 2s ease-in-out;
+        }
+        @keyframes fadeInOut {
+            0%, 100% { opacity: 0; transform: translateY(10px); }
+            20%, 80% { opacity: 1; transform: translateY(0); }
+        }
+        .outcome-text {
+            animation: slideInUp 0.5s ease-out;
+        }
+        @keyframes slideInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        #pdf-export-spinner {
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-stone-900 text-stone-200 flex items-center justify-center min-h-screen p-4">
+
+    <div id="game-container" class="w-full max-w-4xl mx-auto bg-stone-800/50 rounded-lg shadow-2xl p-6 backdrop-blur-sm border border-stone-700">
+
+        <!-- 設定畫面 -->
+        <div id="setup-screen">
+            <h1 class="text-3xl font-bold text-center mb-4 text-amber-300">開啟你的人生</h1>
+            <p class="text-center text-stone-400 mb-8">選擇你的出身，開啟一段新的人生旅程。</p>
+
+            <div class="grid md:grid-cols-2 gap-6">
+                <!-- 角色選擇 -->
+                <div>
+                    <h2 class="text-xl font-bold mb-3 text-amber-400">1. 選擇你的出身</h2>
+                    <div class="space-y-3" id="character-options">
+                        <label class="block p-4 bg-stone-700 rounded-lg cursor-pointer hover:bg-stone-600 border border-transparent has-[:checked]:border-amber-400 has-[:checked]:bg-stone-600/50">
+                            <input type="radio" name="character" value="貴族後裔" class="hidden" checked>
+                            <span class="font-bold text-lg text-white">貴族後裔</span>
+                            <p class="text-sm text-stone-300 mt-1">含著金湯匙出生，擁有財富和人脈，但缺乏歷練。</p>
+                        </label>
+                        <label class="block p-4 bg-stone-700 rounded-lg cursor-pointer hover:bg-stone-600 border border-transparent has-[:checked]:border-amber-400 has-[:checked]:bg-stone-600/50">
+                            <input type="radio" name="character" value="街頭孤兒" class="hidden">
+                            <span class="font-bold text-lg text-white">街頭孤兒</span>
+                            <p class="text-sm text-stone-300 mt-1">在底層掙扎求生，敏銳且務實，但缺乏背景。</p>
+                        </label>
+                        <label class="block p-4 bg-stone-700 rounded-lg cursor-pointer hover:bg-stone-600 border border-transparent has-[:checked]:border-amber-400 has-[:checked]:bg-stone-600/50">
+                            <input type="radio" name="character" value="書香門第" class="hidden">
+                            <span class="font-bold text-lg text-white">書香門第</span>
+                            <p class="text-sm text-stone-300 mt-1">家學淵源，天資聰穎，但體質較弱。</p>
+                        </label>
+                        <label class="block p-4 bg-stone-700 rounded-lg cursor-pointer hover:bg-stone-600 border border-transparent has-[:checked]:border-amber-400 has-[:checked]:bg-stone-600/50">
+                            <input type="radio" name="character" value="custom" class="hidden">
+                            <span class="font-bold text-lg text-white">自訂出身...</span>
+                        </label>
+                        <input type="text" id="custom-character-input" placeholder="請輸入你的出身" class="hidden w-full mt-2 bg-stone-900 text-stone-200 p-2 rounded-lg border border-stone-600 focus:ring-amber-500 focus:border-amber-500">
+                    </div>
+                </div>
+                <!-- 冒險背景 -->
+                <div>
+                     <h2 class="text-xl font-bold mb-3 text-amber-400">2. 選擇人生主題</h2>
+                     <div class="space-y-3" id="setting-options">
+                         <label class="block p-4 bg-stone-700 rounded-lg cursor-pointer hover:bg-stone-600 border border-transparent has-[:checked]:border-amber-400 has-[:checked]:bg-stone-600/50">
+                             <input type="radio" name="setting" value="修仙之路" class="hidden" checked>
+                             <span class="font-bold text-lg text-white">修仙之路</span>
+                             <p class="text-sm text-stone-300 mt-1">踏上尋仙問道之旅，追求長生與力量。</p>
+                         </label>
+                         <label class="block p-4 bg-stone-700 rounded-lg cursor-pointer hover:bg-stone-600 border border-transparent has-[:checked]:border-amber-400 has-[:checked]:bg-stone-600/50">
+                             <input type="radio" name="setting" value="江湖武林" class="hidden">
+                             <span class="font-bold text-lg text-white">江湖武林</span>
+                             <p class="text-sm text-stone-300 mt-1">成為一代俠客，在刀光劍影中行俠仗義。</p>
+                         </label>
+                         <label class="block p-4 bg-stone-700 rounded-lg cursor-pointer hover:bg-stone-600 border border-transparent has-[:checked]:border-amber-400 has-[:checked]:bg-stone-600/50">
+                             <input type="radio" name="setting" value="王朝權謀" class="hidden">
+                             <span class="font-bold text-lg text-white">王朝權謀</span>
+                             <p class="text-sm text-stone-300 mt-1">在朝堂之上步步為營，追逐至高無上的權力。</p>
+                         </label>
+                         <label class="block p-4 bg-stone-700 rounded-lg cursor-pointer hover:bg-stone-600 border border-transparent has-[:checked]:border-amber-400 has-[:checked]:bg-stone-600/50">
+                            <input type="radio" name="setting" value="custom" class="hidden">
+                            <span class="font-bold text-lg text-white">自訂主題...</span>
+                        </label>
+                        <input type="text" id="custom-setting-input" placeholder="請輸入人生主題" class="hidden w-full mt-2 bg-stone-900 text-stone-200 p-2 rounded-lg border border-stone-600 focus:ring-amber-500 focus:border-amber-500">
+                     </div>
+                </div>
+            </div>
+
+            <div class="mt-8 text-center">
+                <button id="start-game-btn" class="bg-amber-500 hover:bg-amber-600 text-stone-900 font-bold py-3 px-8 rounded-lg text-lg transition-colors">開始新人生</button>
+            </div>
+        </div>
+
+        <!-- 遊戲畫面 -->
+        <div id="game-screen" class="hidden">
+            <div class="flex justify-between items-center mb-4">
+                 <h1 class="text-2xl font-bold text-amber-300">人生旅途</h1>
+                 <div class="flex items-center gap-4">
+                    <button id="end-game-now-btn" class="bg-red-800 hover:bg-red-700 text-stone-200 font-bold py-1 px-3 rounded-lg text-sm transition-colors">立即結束</button>
+                    <div id="turn-counter" class="text-lg font-bold bg-stone-700 px-3 py-1 rounded-md">事件 1 / 10</div>
+                 </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- 左側：屬性 -->
+                <div class="md:col-span-1 flex flex-col items-center">
+                    <h2 id="character-title" class="text-xl font-bold text-center mb-3 text-amber-300 h-8"></h2>
+                    <div id="attributes-display" class="w-full bg-black/20 p-4 rounded-lg border border-stone-700 space-y-2">
+                        <div class="text-center mb-2 font-bold text-amber-400 text-lg">能力</div>
+                        <div class="flex justify-between items-center"><span class="text-stone-400">武力:</span><span id="attr-force" class="font-bold text-lg">10 / 99</span></div>
+                        <div class="flex justify-between items-center"><span class="text-stone-400">智謀:</span><span id="attr-intellect" class="font-bold text-lg">10 / 99</span></div>
+                        <div class="flex justify-between items-center"><span class="text-stone-400">風采:</span><span id="attr-charisma" class="font-bold text-lg">10 / 99</span></div>
+                        <div class="border-t border-stone-600 my-3"></div>
+                        <div class="text-center mb-2 font-bold text-amber-400 text-lg">陣營</div>
+                        <div class="flex justify-between items-center"><span class="text-stone-400">名聲:</span><span id="attr-reputation" class="font-bold text-lg">0 / 99</span></div>
+                        <div class="flex justify-between items-center"><span class="text-stone-400">善惡:</span><span id="attr-alignment" class="font-bold text-lg">中立</span></div>
+                        <div class="flex justify-between items-center"><span class="text-stone-400">財務:</span><span id="attr-finance" class="font-bold text-lg">10 / 99</span></div>
+                    </div>
+                </div>
+                <!-- 右側：事件與選項 -->
+                <div class="md:col-span-2">
+                    <div id="event-container">
+                        <h2 id="event-title" class="text-xl font-bold mb-2 text-amber-400"></h2>
+                        <div id="story-log" class="story-text bg-black/20 p-4 rounded-lg h-[180px] overflow-y-auto mb-4 border border-stone-700"></div>
+                    </div>
+                    <div id="decision-container">
+                        <h2 class="text-xl font-bold mb-2 text-amber-400">你的決定</h2>
+                        <div id="options-container" class="space-y-4">
+                             <select id="options-dropdown" class="w-full bg-stone-700 text-stone-200 p-3 rounded-lg border border-stone-600 focus:ring-amber-500 focus:border-amber-500"></select>
+                             <div class="text-center text-stone-400">或</div>
+                             <input type="text" id="custom-action-input" placeholder="自訂你的行動..." class="w-full bg-stone-700 text-stone-200 p-3 rounded-lg border border-stone-600 focus:ring-amber-500 focus:border-amber-500 placeholder-stone-500">
+                             <button id="submit-decision-btn" class="w-full bg-amber-500 hover:bg-amber-600 text-stone-900 font-bold py-3 rounded-lg text-lg">確定</button>
+                        </div>
+                    </div>
+                    
+                    <div id="outcome-container" class="hidden">
+                        <h2 class="text-xl font-bold mb-2 text-amber-400">結果</h2>
+                        <div id="outcome-log" class="story-text bg-black/20 p-4 rounded-lg min-h-[100px] border border-stone-700"></div>
+                        <div class="text-center mt-4">
+                            <button id="next-event-btn" class="bg-amber-500 hover:bg-amber-600 text-stone-900 font-bold py-2 px-6 rounded-lg">繼續...</button>
+                        </div>
+                    </div>
+
+                    <div id="status-message" class="text-center py-4 hidden">
+                         <div id="loading-spinner" class="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-amber-400 border-r-transparent"></div>
+                         <p class="mt-2 text-stone-300">命運的齒輪正在轉動...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 結束畫面 -->
+        <div id="end-screen" class="hidden">
+            <div id="pdf-report-content">
+                <h1 id="end-title" class="text-3xl font-bold text-center mb-4 text-amber-300">人生終點</h1>
+                <div id="end-story" class="story-text bg-black/20 p-4 rounded-lg mb-6 border border-stone-700 text-left"></div>
+                
+                <div id="mbti-result-container" class="bg-black/20 p-4 rounded-lg border border-stone-700 mb-6">
+                    <h2 class="text-2xl font-bold text-amber-400 mb-2">人格分析</h2>
+                    <p id="mbti-type" class="text-xl font-bold mb-3"></p>
+                    <p id="mbti-analysis" class="text-left text-stone-300"></p>
+                </div>
+
+                <div class="bg-black/20 p-4 rounded-lg border border-stone-700 mb-6">
+                    <h2 class="text-2xl font-bold text-amber-400 mb-4 text-center">數據回顧</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+                        <div>
+                            <h3 class="text-xl font-bold text-center mb-2 text-amber-300">最終能力</h3>
+                            <canvas id="radar-chart"></canvas>
+                        </div>
+                         <div>
+                            <h3 class="text-xl font-bold text-center mb-2 text-amber-300">屬性成長趨勢</h3>
+                            <canvas id="line-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="event-log-section" class="bg-black/20 p-4 rounded-lg border border-stone-700 mb-6">
+                    <h2 class="text-2xl font-bold text-amber-400 mb-4 text-center">人生足跡</h2>
+                    <div id="event-log-container" class="space-y-4 text-stone-300"></div>
+                </div>
+            </div>
+
+            <div class="mt-8 flex justify-center items-center gap-4">
+                <button id="play-again-btn" class="bg-amber-500 hover:bg-amber-600 text-stone-900 font-bold py-3 px-8 rounded-lg text-lg">開啟新的人生</button>
+                <button id="export-pdf-btn" class="bg-sky-600 hover:bg-sky-700 text-stone-200 font-bold py-3 px-8 rounded-lg text-lg flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    匯出 PDF 報告
+                </button>
+                 <div id="pdf-export-spinner" class="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-amber-400 border-r-transparent"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const setupScreen = document.getElementById('setup-screen');
+        const gameScreen = document.getElementById('game-screen');
+        const endScreen = document.getElementById('end-screen');
+        const startGameBtn = document.getElementById('start-game-btn');
+        const storyLog = document.getElementById('story-log');
+        const outcomeLog = document.getElementById('outcome-log');
+        const outcomeContainer = document.getElementById('outcome-container');
+        const decisionContainer = document.getElementById('decision-container');
+        const optionsDropdown = document.getElementById('options-dropdown');
+        const customActionInput = document.getElementById('custom-action-input');
+        const submitDecisionBtn = document.getElementById('submit-decision-btn');
+        const turnCounter = document.getElementById('turn-counter');
+        const endTitle = document.getElementById('end-title');
+        const endStory = document.getElementById('end-story');
+        const playAgainBtn = document.getElementById('play-again-btn');
+        const exportPdfBtn = document.getElementById('export-pdf-btn');
+        const pdfExportSpinner = document.getElementById('pdf-export-spinner');
+        const statusMessage = document.getElementById('status-message');
+        const eventTitle = document.getElementById('event-title');
+        const characterTitle = document.getElementById('character-title');
+        const nextEventBtn = document.getElementById('next-event-btn');
+        const endGameNowBtn = document.getElementById('end-game-now-btn');
+        const mbtiResultContainer = document.getElementById('mbti-result-container');
+        const mbtiTypeElement = document.getElementById('mbti-type');
+        const mbtiAnalysisElement = document.getElementById('mbti-analysis');
+        const characterOptions = document.getElementById('character-options');
+        const customCharacterInput = document.getElementById('custom-character-input');
+        const settingOptions = document.getElementById('setting-options');
+        const customSettingInput = document.getElementById('custom-setting-input');
+        const eventLogContainer = document.getElementById('event-log-container');
+
+        // Game State
+        const MAX_TURNS = 10;
+        let currentTurn = 1;
+        let eventHistory = [];
+        let attributeHistory = [];
+        let currentOptions = [];
+        let playerCharacter = '';
+        let gameSetting = '';
+        let isLoading = false;
+        let stagedNextEvent = null;
+        let playerAttributes = { force: 0, intellect: 0, charisma: 0, reputation: 0, alignment: 50, finance: 0 };
+        let mbtiScores = { I: 0, E: 0, S: 0, N: 0, T: 0, F: 0, J: 0, P: 0 };
+        let radarChartInstance = null;
+        let lineChartInstance = null;
+
+        // API Configuration
+        const TEXT_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent`;
+        
+        const RESPONSE_SCHEMA_TURN = {
+            type: "OBJECT",
+            properties: {
+                "event_title": { "type": "STRING", "description": "為新事件取一個簡潔且有共鳴感的標題" },
+                "outcome": { "type": "STRING", "description": "對玩家上個選擇的結果描述" },
+                "attribute_changes": { "type": "OBJECT", "description": "屬性數值變化", "properties": { "force": {"type": "NUMBER"}, "intellect": {"type": "NUMBER"}, "charisma": {"type": "NUMBER"}, "reputation": {"type": "NUMBER"}, "alignment": {"type": "NUMBER"}, "finance": {"type": "NUMBER"} } },
+                "next_event": { "type": "STRING", "description": "下一個全新的獨立事件" },
+                "next_options": { "type": "ARRAY", "description": "針對新事件提供3-4個行動選項，每個選項都包含文本和對應的MBTI特質", 
+                    "items": { 
+                        "type": "OBJECT", 
+                        "properties": { "option_text": { "type": "STRING" }, "mbti_trait": { "type": "STRING", "enum": ["I", "E", "S", "N", "T", "F", "J", "P"] } },
+                        "required": ["option_text", "mbti_trait"]
+                    }
+                },
+            },
+            required: ["event_title", "outcome", "attribute_changes", "next_event", "next_options"]
+        };
+        
+        const RESPONSE_SCHEMA_FINAL = {
+            type: "OBJECT",
+            properties: { 
+                "title": { "type": "STRING", "description": "一個總結角色一生的稱號或標題，必須通俗易懂且有共鳴感，例如'武林盟主'、'富可敵國的商賈'或'孤獨的求道者'" },
+                "final_story": { "type": "STRING", "description": "最終的结局故事" },
+                "mbti_type_name": { "type": "STRING", "description": "根據MBTI結果給予的稱號，例如'建築師'或'探險家'" },
+                "mbti_analysis": { "type": "STRING", "description": "對該MBTI類型的簡短分析" } 
+            },
+            required: ["title", "final_story", "mbti_type_name", "mbti_analysis"]
+        };
+
+        const SYSTEM_INSTRUCTION = `你是一位「命運編織者」，同時也是一位人格分析專家。你將引導玩家經歷一場充滿隨機事件的人生模擬，並在過程中分析他們的性格傾向。
+規則：
+1.  **主題一致性**：所有生成的事件和選項，都「必須」嚴格圍繞玩家選擇的「人生主題」（修仙之路、江湖武林、王朝權謀）來設計。絕對不能出現與主題無關的內容。
+2.  **事件簡潔化**：事件描述應簡潔有力，控制在2-3句話內。
+3.  **內容遞進且不重複**：避免生成與先前事件主題重複的內容。事件的規模和影響力應隨回合數增加而變大。
+4.  **選項簡潔化**：'next_options' 中的 'option_text' 必須是簡潔的動詞片語行動，盡量不超過10個字。
+5.  **嚴格的JSON格式**：JSON回應必須嚴格遵守結構。'next_options' 必須是包含3-4個物件的陣列。為每個 'next_event' 都生成一個簡潔且有共鳴感的 'event_title'。
+6.  **處理自訂行動**：當玩家輸入自訂行動時，請同樣生成結果、屬性變化、以及一個全新的事件與選項，就像處理普通選項一樣。
+7.  **結局設計**：撰寫最終结局時，除了故事，還要提供一個通俗易懂、有共鳴感的響亮標題，以及玩家的 MBTI 人格類型名稱與一段精闢的分析。
+8.  **語言**：所有內容均使用「繁體中文」。
+9.  **失敗事件**：當被要求生成一個'失敗事件'時，請專注描述因為某項屬性歸零而導致的連鎖負面效應，並在'attribute_changes'中只提供對其他屬性的懲罰性負數值，且每次扣除的值不應超過該屬性現有值的 1/5。`;
+
+
+        // --- API Functions ---
+        async function fetchWithRetry(url, payload, maxRetries = 3) {
+            let attempt = 0;
+            while (attempt < maxRetries) {
+                try {
+                    const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    if (response.ok) return await response.json();
+                    if (response.status >= 400 && response.status < 500 && response.status !== 401 && response.status !== 429) throw new Error(`用戶端錯誤: ${response.status}`);
+                    throw new Error(`API 請求失敗: ${response.status}`);
+                } catch (error) {
+                    attempt++;
+                    if (attempt >= maxRetries) throw error; 
+                    console.warn(`API 請求失敗，正在進行第 ${attempt} 次重試...`);
+                    await new Promise(res => setTimeout(res, Math.pow(2, attempt) * 1000));
+                }
+            }
+        }
+
+        async function callTextAPI(prompt, schema) {
+            isLoading = true;
+            updateLoadingState(true);
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
+                generationConfig: { responseMimeType: "application/json", responseSchema: schema, temperature: 0.95 }
+            };
+            try {
+                const result = await fetchWithRetry(TEXT_API_URL, payload);
+                if (result.candidates?.[0]?.content?.parts?.[0]?.text) {
+                    return JSON.parse(result.candidates[0].content.parts[0].text);
+                }
+                throw new Error("無效的 API 回應格式");
+            } catch (error) {
+                console.error('文字 API 錯誤:', error);
+                storyLog.innerHTML = `<p class="text-red-400">命運的絲線似乎纏繞在了一起...請稍後重試。</p>`;
+                return null;
+            } finally {
+                isLoading = false;
+                updateLoadingState(false);
+            }
+        }
+
+        // --- Game Logic ---
+        async function startGame() {
+            const characterValue = document.querySelector('input[name="character"]:checked').value;
+            if (characterValue === 'custom') {
+                playerCharacter = customCharacterInput.value.trim() || "平凡的出身";
+            } else {
+                playerCharacter = characterValue;
+            }
+
+            const settingValue = document.querySelector('input[name="setting"]:checked').value;
+            if (settingValue === 'custom') {
+                gameSetting = customSettingInput.value.trim() || "平凡的人生";
+            } else {
+                gameSetting = settingValue;
+            }
+
+            switch(characterValue) {
+                case "貴族後裔": playerAttributes = { force: 5, intellect: 7, charisma: 10, reputation: 10, alignment: 50, finance: 20 }; break;
+                case "街頭孤兒": playerAttributes = { force: 8, intellect: 7, charisma: 5, reputation: -5, alignment: 50, finance: 2 }; break;
+                case "書香門第": playerAttributes = { force: 4, intellect: 10, charisma: 7, reputation: 5, alignment: 50, finance: 10 }; break;
+                default: playerAttributes = { force: 7, intellect: 7, charisma: 7, reputation: 0, alignment: 50, finance: 5 }; break;
+            }
+            attributeHistory.push({...playerAttributes}); // Store initial state
+            updateAttributesUI();
+            
+            setupScreen.classList.add('hidden');
+            gameScreen.classList.remove('hidden');
+            
+            const initialPrompt = `新的人生開始了。出身: ${playerCharacter}, 人生主題: ${gameSetting}。請生成第一個隨機事件、事件標題、和3-4個行動選項。'outcome' 欄位請填寫一句歡迎詞。`;
+            const data = await callTextAPI(initialPrompt, RESPONSE_SCHEMA_TURN);
+            if (data) {
+                 const { event_title, next_event, next_options } = data;
+                 updateGameScreen(event_title, next_event, next_options);
+                 currentTurn = 1;
+                 turnCounter.textContent = `事件 ${currentTurn} / ${MAX_TURNS}`;
+            }
+        }
+        
+        function findFailingAttribute(changes) {
+            if (!changes) return null;
+            const attrMap = { force: '武力', intellect: '智謀', charisma: '風采', reputation: '名聲', finance: '財務' };
+            for (const key in changes) {
+                if (changes.hasOwnProperty(key) && playerAttributes.hasOwnProperty(key) && key !== 'alignment') {
+                    if ((playerAttributes[key] + changes[key]) < 0) {
+                        return attrMap[key] || key;
+                    }
+                }
+            }
+            return null;
+        }
+
+        async function submitDecision() {
+            if (isLoading) return;
+            
+            const customAction = customActionInput.value.trim();
+            const selectedIndex = optionsDropdown.selectedIndex;
+            const selectedOption = currentOptions[selectedIndex];
+            
+            let choiceText;
+            let prompt;
+
+            if (customAction) {
+                choiceText = customAction;
+                prompt = `第 ${currentTurn} 回合，玩家自訂了行動：「${choiceText}」。請生成這個行動的結果與屬性變化，然後生成一個全新的事件、事件標題與選項。`;
+            } else if (selectedOption) {
+                choiceText = selectedOption.option_text;
+                mbtiScores[selectedOption.mbti_trait]++;
+                prompt = `第 ${currentTurn} 回合，玩家選擇了：「${choiceText}」(人格傾向: ${selectedOption.mbti_trait})。請生成這個選擇的結果與屬性變化，然後生成一個全新的事件、事件標題與選項。`;
+            } else {
+                return;
+            }
+            
+            const lastEventTitle = eventTitle.textContent;
+            const lastEventDescription = storyLog.querySelector('p').textContent;
+            
+            decisionContainer.classList.add('hidden');
+            statusMessage.classList.remove('hidden');
+
+            const data = await callTextAPI(prompt, RESPONSE_SCHEMA_TURN);
+            if (!data) return;
+
+            const failingAttributeName = findFailingAttribute(data.attribute_changes);
+            let combinedChanges = {...data.attribute_changes};
+
+            if (failingAttributeName) {
+                // FAILURE PATH
+                const failurePrompt = `玩家在事件「${lastEventTitle}」中選擇了「${choiceText}」，這將導致他的「${failingAttributeName}」屬性歸零。請生成一個因此觸發的**失敗事件**。這個失敗事件的'outcome'應描述他如何因為該屬性崩潰而陷入困境。然後，在'attribute_changes'中對其他尚有剩餘的屬性（值>0）進行適度的懲罰性扣減（每次扣除的值不應超過該屬性現有值的 1/5）。最後，生成一個全新的'next_event'和'next_options'。`;
+                
+                const failureData = await callTextAPI(failurePrompt, RESPONSE_SCHEMA_TURN);
+
+                if (failureData) {
+                    const cappedFailureChanges = {};
+                    for (const key in failureData.attribute_changes) {
+                        if (failureData.attribute_changes.hasOwnProperty(key) && playerAttributes.hasOwnProperty(key)) {
+                            const penalty = failureData.attribute_changes[key];
+                            if (penalty < 0) {
+                                const currentValue = playerAttributes[key] + (data.attribute_changes[key] || 0);
+                                const maxPenalty = Math.floor(currentValue / 5);
+                                cappedFailureChanges[key] = Math.max(penalty, -maxPenalty);
+                            } else {
+                                cappedFailureChanges[key] = penalty;
+                            }
+                        }
+                    }
+                    
+                    for (const key in cappedFailureChanges) {
+                        combinedChanges[key] = (combinedChanges[key] || 0) + cappedFailureChanges[key];
+                    }
+
+                    applyAttributeChanges(data.attribute_changes); 
+                    applyAttributeChanges(cappedFailureChanges);
+                    
+                    outcomeLog.innerHTML = `<div class="outcome-text text-red-400">${failureData.outcome}</div>`;
+                    eventHistory.push({ turn: currentTurn, title: lastEventTitle, description: lastEventDescription, choice: choiceText, outcome: `(失敗) ${failureData.outcome}`, changes: combinedChanges });
+                    stagedNextEvent = failureData;
+                } else {
+                    applyAttributeChanges(data.attribute_changes);
+                    outcomeLog.innerHTML = `<div class="outcome-text text-red-400">你的選擇導致了災難性的後果...</div>`;
+                    eventHistory.push({ turn: currentTurn, title: lastEventTitle, description: lastEventDescription, choice: choiceText, outcome: `你的選擇導致了災難性的後果...`, changes: combinedChanges });
+                    stagedNextEvent = data;
+                }
+
+            } else {
+                // SUCCESS PATH
+                applyAttributeChanges(data.attribute_changes);
+                outcomeLog.innerHTML = `<div class="outcome-text">${data.outcome}</div>`;
+                eventHistory.push({ turn: currentTurn, title: lastEventTitle, description: lastEventDescription, choice: choiceText, outcome: data.outcome, changes: combinedChanges });
+                stagedNextEvent = data;
+            }
+            
+            attributeHistory.push({...playerAttributes});
+            outcomeContainer.classList.remove('hidden');
+            statusMessage.classList.add('hidden');
+            
+            if (currentTurn >= MAX_TURNS) {
+                nextEventBtn.textContent = "查看結局";
+            }
+        }
+        
+        async function handleNextEventClick() {
+            updateAttributesUI(); // Reset attribute display before continuing
+            outcomeContainer.classList.add('hidden');
+            if (currentTurn >= MAX_TURNS) {
+                await handleEndGameNow(true); 
+                return;
+            }
+            if (stagedNextEvent) {
+                currentTurn++;
+                const { event_title, next_event, next_options } = stagedNextEvent;
+                updateGameScreen(event_title, next_event, next_options);
+                customActionInput.value = '';
+                stagedNextEvent = null; 
+            }
+        }
+
+        function calculateMBTI() {
+            let result = '';
+            result += mbtiScores.I >= mbtiScores.E ? 'I' : 'E';
+            result += mbtiScores.S >= mbtiScores.N ? 'S' : 'N';
+            result += mbtiScores.T >= mbtiScores.F ? 'T' : 'F';
+            result += mbtiScores.J >= mbtiScores.P ? 'J' : 'P';
+            return result;
+        }
+
+        async function handleEndGameNow(isGraceful = false) {
+            if (isLoading && !isGraceful) return;
+            isLoading = true;
+            updateLoadingState(true);
+            decisionContainer.classList.add('hidden');
+            outcomeContainer.classList.add('hidden');
+
+            const finalMBTI = calculateMBTI();
+            const reason = isGraceful ? "人生已到終點" : "人生旅途提前結束了";
+            const historyText = eventHistory.length > 0 ? `經歷：\n${eventHistory.map(e => `事件 ${e.turn}：「${e.title}」，選擇：「${e.choice}」。`).join('\n')}` : "玩家尚未開始經歷任何事件。";
+            
+            const finalStoryPrompt = `${reason}。${historyText}\n最終屬性: ${JSON.stringify(playerAttributes)}\n玩家的人格類型傾向為: ${finalMBTI}。請根據這一切，撰寫總結性的结局故事、一個響亮的、通俗易懂且有共鳴感的標題（例如：「武林盟主」），以及對此${finalMBTI}人格的稱號與分析。`;
+            
+            const storyData = await callTextAPI(finalStoryPrompt, RESPONSE_SCHEMA_FINAL);
+            if (storyData) {
+                showEnding(storyData.title, storyData.final_story, finalMBTI, storyData.mbti_type_name, storyData.mbti_analysis);
+            } else {
+                showEnding("人生終點", "人生的結局消散在迷霧之中...", finalMBTI, "未知的人格", "在命運的迷霧中，你的性格也變得難以捉摸。");
+            }
+            isLoading = false;
+            updateLoadingState(false);
+        }
+
+        function updateGameScreen(title, story, options) {
+            eventTitle.textContent = title;
+            storyLog.innerHTML = `<p>${story}</p>`;
+            optionsDropdown.innerHTML = '';
+            currentOptions = options;
+            if (options && options.length > 0) {
+                options.forEach((option, index) => {
+                    const optionElement = document.createElement('option');
+                    optionElement.textContent = option.option_text;
+                    optionElement.value = index;
+                    optionsDropdown.appendChild(optionElement);
+                });
+            }
+            turnCounter.textContent = `事件 ${currentTurn} / ${MAX_TURNS}`;
+            decisionContainer.classList.remove('hidden');
+        }
+        
+        function updateLoadingState(isLoading) {
+            statusMessage.classList.toggle('hidden', !isLoading);
+            if (isLoading) {
+                 decisionContainer.classList.add('hidden');
+            }
+        }
+        
+        function applyAttributeChanges(changes) {
+            if (!changes || Object.keys(changes).length === 0) return;
+            const attrMap = { force: '武力', intellect: '智謀', charisma: '風采', reputation: '名聲', alignment: '善惡', finance: '財務' };
+            let changeTextParts = [];
+
+            for (const key in changes) {
+                if (changes.hasOwnProperty(key) && changes[key] !== 0 && playerAttributes.hasOwnProperty(key)) {
+                    const changeValue = changes[key];
+                    const el = document.getElementById(`attr-${key}`);
+                    
+                    const originalValue = playerAttributes[key];
+                    playerAttributes[key] = Math.max(0, originalValue + changeValue); 
+                    const actualChange = playerAttributes[key] - originalValue;
+
+                    if (el) {
+                        const changeSign = actualChange >= 0 ? '+' : '';
+                        const changeColor = actualChange >= 0 ? 'text-green-400' : 'text-red-400';
+                        
+                        if (key === 'alignment') {
+                            updateAlignmentUI(); // Update text-based alignment
+                        } else {
+                            const newValue = playerAttributes[key];
+                            const displayValue = Math.min(newValue, 99);
+                            el.innerHTML = `${displayValue} <span class="${changeColor}">(${changeSign}${actualChange})</span> / 99`;
+                        }
+                    }
+
+                    if(actualChange !== 0) {
+                        const changeSignForLog = actualChange > 0 ? '+' : '';
+                        const changeColorForLog = actualChange > 0 ? 'text-green-400' : 'text-red-400';
+                        changeTextParts.push(`<span class="${changeColorForLog}">${attrMap[key]} ${changeSignForLog}${actualChange}</span>`);
+                    }
+                }
+            }
+
+            if (changeTextParts.length > 0) {
+                const changeElement = document.createElement('div');
+                changeElement.className = 'text-center font-bold italic mt-2 attr-change';
+                changeElement.innerHTML = `[ ${changeTextParts.join(', ')} ]`;
+                setTimeout(() => { if (outcomeLog) outcomeLog.appendChild(changeElement); }, 500);
+            }
+            
+            updateCharacterTitle();
+        }
+
+        function updateAlignmentUI() {
+            const alignmentEl = document.getElementById('attr-alignment');
+            if (!alignmentEl) return;
+            const value = playerAttributes.alignment;
+            if (value > 65) {
+                alignmentEl.textContent = "善";
+                alignmentEl.className = "font-bold text-lg text-sky-400";
+            } else if (value < 35) {
+                alignmentEl.textContent = "惡";
+                alignmentEl.className = "font-bold text-lg text-red-500";
+            } else {
+                alignmentEl.textContent = "中立";
+                alignmentEl.className = "font-bold text-lg text-amber-400";
+            }
+        }
+        
+        function updateCharacterTitle() {
+            const { reputation, alignment, force, intellect, charisma } = playerAttributes;
+            let adjective = "默默無聞的";
+            let profession = "凡人";
+
+            if (reputation > 30) {
+                adjective = alignment > 65 ? "受人敬仰的" : (alignment < 35 ? "令人畏懼的" : "聲名遠播的");
+            } else if (reputation < -30) {
+                adjective = alignment < 35 ? "臭名昭著的" : (alignment > 65 ? "備受爭議的" : "惡名昭彰的");
+            } else if (reputation > 15) {
+                adjective = alignment > 65 ? "小有名氣的" : "風頭正盛的";
+            } else if (reputation < -15) {
+                adjective = "聲名狼藉的";
+            }
+
+            const abilities = { force, intellect, charisma };
+            const highestAbility = Object.keys(abilities).reduce((a, b) => abilities[a] > abilities[b] ? a : b);
+
+            const theme = gameSetting || "";
+            if (theme.includes("修仙")) {
+                switch (highestAbility) {
+                    case 'intellect': profession = charisma > force ? "悟道者" : "靈根修士"; break;
+                    case 'force':  profession = charisma > intellect ? "煉體士" : "苦修士"; break;
+                    case 'charisma':    profession = intellect > force ? "丹師" : "器師"; break;
+                }
+            } else if (theme.includes("江湖") || theme.includes("武林")) {
+                switch (highestAbility) {
+                    case 'intellect': profession = charisma > force ? "智囊" : "名宿"; break;
+                    case 'force':  profession = charisma > intellect ? "豪俠" : "武夫"; break;
+                    case 'charisma':    profession = intellect > force ? "刺客" : "遊俠"; break;
+                }
+            } else if (theme.includes("王朝") || theme.includes("權謀")) {
+                switch (highestAbility) {
+                    case 'intellect': profession = charisma > force ? "謀士" : "書生"; break;
+                    case 'force':  profession = charisma > intellect ? "將軍" : "衛兵"; break;
+                    case 'charisma':    profession = intellect > force ? "權臣" : "密探"; break;
+                }
+            } else {
+                 switch (highestAbility) {
+                    case 'intellect': profession = charisma > force ? "學者" : "書生"; break;
+                    case 'force':  profession = charisma > intellect ? "武人" : "遊俠"; break;
+                    case 'charisma':    profession = intellect > force ? "刺客" : "巧匠"; break;
+                }
+            }
+            characterTitle.textContent = `${adjective}${profession}`;
+        }
+
+
+        function updateAttributesUI() {
+            Object.keys(playerAttributes).forEach(key => {
+                const el = document.getElementById(`attr-${key}`);
+                if (el) {
+                    if (key === 'alignment') {
+                        updateAlignmentUI();
+                    } else {
+                        el.textContent = `${Math.min(playerAttributes[key], 99)} / 99`;
+                    }
+                }
+            });
+            updateCharacterTitle();
+        }
+
+        function showEnding(title, story, mbtiType, mbtiTypeName, mbtiAnalysis) {
+            gameScreen.classList.add('hidden');
+            endScreen.classList.remove('hidden');
+            endTitle.textContent = title || "人生終點";
+            endStory.innerHTML = story.replace(/\n/g, '<br>');
+            mbtiTypeElement.textContent = `${mbtiType} - ${mbtiTypeName}`;
+            mbtiAnalysisElement.textContent = mbtiAnalysis;
+            
+            renderRadarChart();
+            renderLineChart();
+            renderEventLog();
+        }
+        
+        function formatChangesForLog(changes) {
+            if (!changes || Object.keys(changes).length === 0) return '';
+            const attrMap = { force: '武力', intellect: '智謀', charisma: '風采', reputation: '名聲', alignment: '善惡', finance: '財務' };
+            let parts = [];
+            for (const key in changes) {
+                if(changes[key] !== 0) {
+                    const changeValue = changes[key];
+                    const changeSign = changeValue > 0 ? '+' : '';
+                    const changeColor = changeValue > 0 ? 'text-green-400' : 'text-red-400';
+                    parts.push(`<span class="${changeColor}">${attrMap[key]} ${changeSign}${changeValue}</span>`);
+                }
+            }
+            return parts.length > 0 ? `[ ${parts.join(', ')} ]` : '';
+        }
+
+        function renderRadarChart() {
+            const ctx = document.getElementById('radar-chart').getContext('2d');
+            const numericalAttributes = {
+                force: playerAttributes.force,
+                intellect: playerAttributes.intellect,
+                charisma: playerAttributes.charisma,
+                reputation: playerAttributes.reputation,
+                finance: playerAttributes.finance
+            };
+            const data = {
+                labels: ['武力', '智謀', '風采', '名聲', '財務'],
+                datasets: [{
+                    label: '最終能力',
+                    data: Object.values(numericalAttributes),
+                    fill: true,
+                    backgroundColor: 'rgba(252, 211, 77, 0.2)',
+                    borderColor: 'rgb(252, 211, 77)',
+                    pointBackgroundColor: 'rgb(252, 211, 77)',
+                    pointBorderColor: '#fff',
+                    pointHoverBackgroundColor: '#fff',
+                    pointHoverBorderColor: 'rgb(252, 211, 77)'
+                }]
+            };
+            const config = {
+                type: 'radar',
+                data: data,
+                options: {
+                    scales: {
+                        r: {
+                            angleLines: { color: 'rgba(255, 255, 255, 0.2)' },
+                            grid: { color: 'rgba(255, 255, 255, 0.2)' },
+                            pointLabels: { color: 'rgb(252, 211, 77)', font: { size: 14 } },
+                            ticks: { color: '#fff', backdropColor: 'rgba(0,0,0,0.5)', min: 0 }
+                        }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            };
+            if(radarChartInstance) radarChartInstance.destroy();
+            radarChartInstance = new Chart(ctx, config);
+        }
+
+        function renderLineChart() {
+            const ctx = document.getElementById('line-chart').getContext('2d');
+            const labels = Array.from({length: attributeHistory.length}, (_, i) => i === 0 ? '開局' : `事件 ${i}`);
+            const datasets = [
+                { label: '武力', data: attributeHistory.map(h => h.force), borderColor: '#ef4444', tension: 0.1, fill: false },
+                { label: '智謀', data: attributeHistory.map(h => h.intellect), borderColor: '#38bdf8', tension: 0.1, fill: false },
+                { label: '風采', data: attributeHistory.map(h => h.charisma), borderColor: '#a78bfa', tension: 0.1, fill: false },
+                { label: '名聲', data: attributeHistory.map(h => h.reputation), borderColor: '#fde047', tension: 0.1, fill: false },
+                { label: '善惡', data: attributeHistory.map(h => h.alignment), borderColor: '#f8fafc', tension: 0.1, fill: false },
+                { label: '財務', data: attributeHistory.map(h => h.finance), borderColor: '#4ade80', tension: 0.1, fill: false }
+            ];
+             const config = {
+                type: 'line',
+                data: { labels, datasets },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: { ticks: { color: '#d6d3d1' }, grid: { color: 'rgba(255, 255, 255, 0.1)' } },
+                        y: { ticks: { color: '#d6d3d1' }, grid: { color: 'rgba(255, 255, 255, 0.1)' } }
+                    },
+                    plugins: { legend: { labels: { color: '#d6d3d1' } } }
+                }
+            };
+            if(lineChartInstance) lineChartInstance.destroy();
+            lineChartInstance = new Chart(ctx, config);
+        }
+        
+        function renderEventLog() {
+            eventLogContainer.innerHTML = '';
+            if (eventHistory.length === 0) {
+                eventLogContainer.innerHTML = '<div>尚未發生任何事件。</div>';
+                return;
+            }
+            eventHistory.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'relative pl-8 pb-6';
+                if (index < eventHistory.length - 1) {
+                    div.innerHTML += '<div class="absolute top-5 left-2 w-px h-full bg-stone-600"></div>';
+                }
+                div.innerHTML += `
+                    <div class="absolute top-3 left-0">
+                        <div class="h-4 w-4 bg-amber-400 rounded-full border-4 border-stone-800"></div>
+                    </div>
+                `;
+                const changesHTML = formatChangesForLog(item.changes);
+                div.innerHTML += `
+                    <p class="font-bold text-amber-400 text-base">事件 ${item.turn}：${item.title}</p>
+                    <p class="text-sm text-stone-300 mt-1 mb-2">${item.description}</p>
+                    <div class="p-3 bg-stone-900/50 rounded-md border border-stone-700">
+                        <p class="text-sm italic text-stone-400">你的決定：${item.choice}</p>
+                        <p class="text-sm font-bold mt-1">${changesHTML}</p>
+                    </div>
+                `;
+                eventLogContainer.appendChild(div);
+            });
+        }
+        
+        async function exportPDF() {
+            pdfExportSpinner.style.display = 'inline-block';
+            exportPdfBtn.disabled = true;
+
+            const { jsPDF } = window.jspdf;
+            const content = document.getElementById('pdf-report-content');
+            
+            try {
+                const canvas = await html2canvas(content, { 
+                    backgroundColor: '#1c1917',
+                    scale: 2 
+                });
+                const imgData = canvas.toDataURL('image/png');
+                
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = pdf.internal.pageSize.getHeight();
+                const imgProps = pdf.getImageProperties(imgData);
+                const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
+                let heightLeft = imgHeight;
+                let position = 0;
+                
+                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+                heightLeft -= pdfHeight;
+                
+                while (heightLeft > 0) {
+                    position = heightLeft - imgHeight;
+                    pdf.addPage();
+                    pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+                    heightLeft -= pdfHeight;
+                }
+
+                pdf.save('我的人生旅途報告.pdf');
+
+            } catch (error) {
+                console.error("PDF 匯出失敗:", error);
+                alert("抱歉，PDF 匯出失敗，請再試一次。");
+            } finally {
+                 pdfExportSpinner.style.display = 'none';
+                 exportPdfBtn.disabled = false;
+            }
+        }
+
+        function resetGame() {
+            currentTurn = 1;
+            eventHistory = [];
+            attributeHistory = [];
+            stagedNextEvent = null;
+            mbtiScores = { I: 0, E: 0, S: 0, N: 0, T: 0, F: 0, J: 0, P: 0 };
+            storyLog.innerHTML = '';
+            outcomeLog.innerHTML = '';
+            customActionInput.value = '';
+            optionsDropdown.innerHTML = '';
+            nextEventBtn.textContent = "繼續...";
+            if (radarChartInstance) radarChartInstance.destroy();
+            if (lineChartInstance) lineChartInstance.destroy();
+            radarChartInstance = null;
+            lineChartInstance = null;
+            endScreen.classList.add('hidden');
+            setupScreen.classList.remove('hidden');
+        }
+        
+        function handleCustomInputToggle(event) {
+            const radioGroup = event.target.name;
+            const customInput = (radioGroup === 'character') ? customCharacterInput : customSettingInput;
+            
+            if(event.target.value === 'custom') {
+                customInput.classList.remove('hidden');
+            } else {
+                customInput.classList.add('hidden');
+            }
+        }
+
+        startGameBtn.addEventListener('click', startGame);
+        playAgainBtn.addEventListener('click', resetGame);
+        nextEventBtn.addEventListener('click', handleNextEventClick);
+        endGameNowBtn.addEventListener('click', () => handleEndGameNow(false));
+        submitDecisionBtn.addEventListener('click', submitDecision);
+        exportPdfBtn.addEventListener('click', exportPDF);
+        
+        characterOptions.addEventListener('change', handleCustomInputToggle);
+        settingOptions.addEventListener('change', handleCustomInputToggle);
+
+    </script>
+</body>
+</html>
+
